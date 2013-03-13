@@ -81,7 +81,7 @@ static int num_preferred_base;
 static struct progress *progress_state;
 static int pack_compression_level = Z_DEFAULT_COMPRESSION;
 static int pack_compression_seen;
-
+static int sleep_sec_on_exit;
 static unsigned long delta_cache_size = 0;
 static unsigned long max_delta_cache_size = 256 * 1024 * 1024;
 static unsigned long cache_max_small_delta_size = 1000;
@@ -712,7 +712,7 @@ static struct object_entry **compute_write_order(void)
 	return wo;
 }
 
-static void write_pack_file(void)
+void write_pack_file(void)
 {
 	uint32_t i = 0, j;
 	struct sha1file *f;
@@ -731,7 +731,10 @@ static void write_pack_file(void)
 		char *pack_tmp_name = NULL;
 
 		if (pack_to_stdout)
+		{
+			trace_printf("sha1fd_throughput\n");
 			f = sha1fd_throughput(1, "<stdout>", progress_state);
+		}
 		else
 			f = create_tmp_packfile(&pack_tmp_name);
 
@@ -751,11 +754,16 @@ static void write_pack_file(void)
 		 * If so, rewrite it like in fast-import
 		 */
 		if (pack_to_stdout) {
+			trace_printf("pack_to_stdout\n");
 			sha1close(f, sha1, CSUM_CLOSE);
 		} else if (nr_written == nr_remaining) {
+			trace_printf("nr_written == nr_remaining\n");
 			sha1close(f, sha1, CSUM_FSYNC);
 		} else {
+
 			int fd = sha1close(f, sha1, 0);
+			trace_printf("another close operation\n");
+
 			fixup_pack_header_footer(fd, sha1, pack_tmp_name,
 						 nr_written, sha1, offset);
 			close(fd);
@@ -811,7 +819,6 @@ static void write_pack_file(void)
 		die("wrote %"PRIu32" objects while expecting %"PRIu32,
 			written, nr_result);
 }
-
 static int locate_object_entry_hash(const unsigned char *sha1)
 {
 	int i;
@@ -1566,6 +1573,7 @@ static int try_delta(struct unpacked *trg, struct unpacked *src,
 	}
 	if (!src->data) {
 		read_lock();
+		/*trace_printf("try_delta : read_sha1_file\n");*/
 		src->data = read_sha1_file(src_entry->idx.sha1, &type, &sz);
 		read_unlock();
 		if (!src->data) {
@@ -1897,6 +1905,7 @@ static void ll_find_deltas(struct object_entry **list, unsigned list_size,
 {
 	struct thread_params *p;
 	int i, ret, active_threads = 0;
+	/*trace_printf("ll_find_deltas\n");*/
 
 	init_threaded_search();
 
@@ -1939,6 +1948,7 @@ static void ll_find_deltas(struct object_entry **list, unsigned list_size,
 		list += sub_size;
 		list_size -= sub_size;
 	}
+	/*trace_printf("ll_find_deltas 1\n");*/
 
 	/* Start work threads. */
 	for (i = 0; i < delta_search_threads; i++) {
@@ -1952,6 +1962,7 @@ static void ll_find_deltas(struct object_entry **list, unsigned list_size,
 			die("unable to create thread: %s", strerror(ret));
 		active_threads++;
 	}
+	/*trace_printf("ll_find_deltas 2\n");*/
 
 	/*
 	 * Now let's wait for work completion.  Each time a thread is done
@@ -1965,8 +1976,10 @@ static void ll_find_deltas(struct object_entry **list, unsigned list_size,
 		struct thread_params *target = NULL;
 		struct thread_params *victim = NULL;
 		unsigned sub_size = 0;
+		/*trace_printf("ll_find_deltas : active_threads=%d\n", active_threads);*/
 
 		progress_lock();
+		/*trace_printf("in progress lock\n");*/
 		for (;;) {
 			for (i = 0; !target && i < delta_search_threads; i++)
 				if (!p[i].working)
@@ -2006,6 +2019,7 @@ static void ll_find_deltas(struct object_entry **list, unsigned list_size,
 		target->remaining = sub_size;
 		target->working = 1;
 		progress_unlock();
+		/*trace_printf("end: progress_unlock\n");*/
 
 		pthread_mutex_lock(&target->mutex);
 		target->data_ready = 1;
@@ -2019,8 +2033,11 @@ static void ll_find_deltas(struct object_entry **list, unsigned list_size,
 			active_threads--;
 		}
 	}
+	/*trace_printf("ll_find_deltas 3\n");*/
 	cleanup_threaded_search();
 	free(p);
+	/*trace_printf("end: ll_find_deltas \n");*/
+
 }
 
 #else
@@ -2107,6 +2124,7 @@ static void prepare_pack(int window, int depth)
 			die("inconsistency with delta count");
 	}
 	free(delta_list);
+	trace_printf("finish prepare pack \n");
 }
 
 static int git_pack_config(const char *k, const char *v, void *cb)
@@ -2505,6 +2523,9 @@ int cmd_pack_objects(int argc, const char **argv, const char *prefix)
 			    N_("pack compression level")),
 		OPT_SET_INT(0, "keep-true-parents", &grafts_replace_parents,
 			    N_("do not hide commits by grafts"), 0),
+		OPT_SET_INT(0, "sleep-sec-on-exit", &sleep_sec_on_exit,
+			 N_("sleep seconds on exit"), -1),
+
 		OPT_END(),
 	};
 
@@ -2593,10 +2614,15 @@ int cmd_pack_objects(int argc, const char **argv, const char *prefix)
 		return 0;
 	if (nr_result)
 		prepare_pack(window, depth);
+
 	write_pack_file();
 	if (progress)
 		fprintf(stderr, "Total %"PRIu32" (delta %"PRIu32"),"
 			" reused %"PRIu32" (delta %"PRIu32")\n",
 			written, written_delta, reused, reused_delta);
+	if (sleep_sec_on_exit > 0)
+	{
+		sleep(sleep_sec_on_exit);
+	}
 	return 0;
 }

@@ -12,7 +12,8 @@
 #include "run-command.h"
 #include "sigchain.h"
 #include "version.h"
-
+#include "socket-utils.h"
+#include "logging-util.h"
 static const char upload_pack_usage[] = "git upload-pack [--strict] [--timeout=<n>] <dir>";
 
 /* bits #0..7 in revision.h, #8..10 in commit.c */
@@ -44,7 +45,7 @@ static int use_sideband;
 static int debug_fd;
 static int advertise_refs;
 static int stateless_rpc;
-
+static int sleep_sec_for_pack_objects; 
 static void reset_timeout(void)
 {
 	alarm(timeout);
@@ -143,9 +144,10 @@ static void create_pack_file(void)
 	char data[8193], progress[128];
 	char abort_msg[] = "aborting due to possible repository "
 		"corruption on the remote side.";
+	char arg_for_sleep_sec[128];
 	int buffered = -1;
 	ssize_t sz;
-	const char *argv[10];
+	const char *argv[11];
 	int arg = 0;
 
 	argv[arg++] = "pack-objects";
@@ -164,6 +166,12 @@ static void create_pack_file(void)
 		argv[arg++] = "--delta-base-offset";
 	if (use_include_tag)
 		argv[arg++] = "--include-tag";
+	if (sleep_sec_for_pack_objects > 0) {
+		sprintf(arg_for_sleep_sec, "--sleep-sec-on-exit=%d", 
+			sleep_sec_for_pack_objects);
+		argv[arg++] = arg_for_sleep_sec;
+	}
+
 	argv[arg++] = NULL;
 
 	memset(&pack_objects, 0, sizeof(pack_objects));
@@ -812,6 +820,10 @@ int main(int argc, char **argv)
 		if (!prefixcmp(arg, "--timeout=")) {
 			timeout = atoi(arg+10);
 			daemon_mode = 1;
+			continue;
+		}
+		if (!prefixcmp(arg, "--sleep-sec-for-pack-objects=")) {
+			sleep_sec_for_pack_objects = atoi(arg+29);
 			continue;
 		}
 		if (!strcmp(arg, "--")) {
