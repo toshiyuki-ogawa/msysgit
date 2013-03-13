@@ -48,7 +48,7 @@ init_repository()
 modify_some_files()
 {
 	local name
-	for name in `generate_names 'a' 'a'`
+	for name in `generate_names 'a' 'f'`
 	do
 		local file_name
 		for file_name in `create_file_names 0 1 ${name} 'c'`
