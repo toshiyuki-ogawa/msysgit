@@ -70,9 +70,9 @@ test_expect_success 'setup repository' '
 	modify_some_files
 '
 
-test_expect_success 'clone in stress circumstance' '
-	clone_in_stress 200
-'
+#test_expect_success 'clone in stress circumstance' '
+#	clone_in_stress 200
+#'
 
 stop_git_daemon
 
