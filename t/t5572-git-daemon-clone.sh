@@ -67,12 +67,13 @@ say >&3 "$GIT_DAEMON_DOCUMENT_ROOT_PATH/repo"
 
 test_expect_success 'setup repository' '
 	init_repository &&
-	modify_some_files
+	(cd "$GIT_DAEMON_DOCUMENT_ROOT_PATH/repo" &&
+	 modify_some_files)
 '
 
-#test_expect_success 'clone in stress circumstance' '
-#	clone_in_stress 200
-#'
+test_expect_success 'clone in stress circumstance' '
+	clone_in_stress 200
+'
 
 stop_git_daemon
 
