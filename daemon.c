@@ -779,6 +779,10 @@ static int start_daemon_as_service(int incomming,
 		char str_buffer[200];
 		memset(&env_buf, 0, sizeof(env_buf));
 		env_buffer_init(&env_buf, env);
+		snprintf(str_buffer, sizeof(str_buffer), 
+			"_WIN_SOCK_IO={%d, %d}", 0, 1);
+		env_buffer_add(&end_buf, str_buffer);
+		env = env_buffer_copy
 
 	}
 	
