@@ -747,11 +747,67 @@ static void check_dead_children(void)
 		} else
 			cradle = &blanket->next;
 }
+#ifndef WIN32
+static int start_daemon_as_service(int incomming, 
+	const char **env, const char **argv)
+{
+	struct child_process cld = { NULL };
+	cld.env = (const char **)env;
+	cld.argv = (const char **)cld_argv;
+	cld.in = incoming;
+	cld.out = dup(incoming);
+
+
+	if (start_command(&cld))
+		logerror("unable to fork");
+	else
+		add_child(&cld, addr, addrlen);
+	close(incoming);
+}
+#else
+static int start_daemon_as_service(int incomming, 
+	const char **env, const char **argv)
+{
+	struct child_process cld;
+	char **proc_env;
+	memset(&cld, 0, sizeof(cld));
+	cld.env = (const char **)env;
+	cld.argv = (const char **)cld_argv;
+
+	{
+		env_buffer env_buf;
+		char str_buffer[200];
+		memset(&env_buf, 0, sizeof(env_buf));
+		env_buffer_init(&env_buf, env);
+
+	}
+	
+	cld.in = -1;
+	cld.out = 0;
+
+
+	if (start_command(&cld))
+		logerror("unable to fork");
+	else {
+		if (WSADuplicateSocket(fd_to_socket(incoming),
+			cld.pid, &protocol_info) == 0) {
+			add_child(&cld, addr, addrlen);
+			
+
+		}
+		else {
+			kill(cld.pid, SIGTERM);
+		}
+	}
+	
+	close(incoming);
+}
+#endif
+
 
 static char **cld_argv;
 static void handle(int incoming, struct sockaddr *addr, socklen_t addrlen)
 {
-	struct child_process cld = { NULL };
 	char addrbuf[300] = "REMOTE_ADDR=", portbuf[300];
 	char *env[] = { addrbuf, portbuf, NULL };
 
@@ -792,23 +848,6 @@ static void handle(int incoming, struct sockaddr *addr, socklen_t addrlen)
 	cld.in = incoming;
 	cld.out = dup(incoming);
 
-	if (is_socket(incoming))
-	{
-		logging_printf("incoming is socket\n");
-	}
-	else
-	{
-		logging_printf("incoming is not socket\n");
-	}
-	if (is_socket(cld.out))
-	{
-		logging_printf("cld.out is socket\n");
-	}
-	else
-	{
-		logging_printf("cld.out is not socket\n");
-	}
-
 
 	if (start_command(&cld))
 		logerror("unable to fork");
@@ -816,6 +855,8 @@ static void handle(int incoming, struct sockaddr *addr, socklen_t addrlen)
 		add_child(&cld, addr, addrlen);
 	close(incoming);
 }
+
+
 
 static void child_handler(int signo)
 {
@@ -1399,9 +1440,19 @@ int main(int argc, char **argv)
 		if (!freopen("/dev/null", "w", stderr))
 			die_errno("failed to redirect stderr to /dev/null");
 	}
+	if (is_socket(1))
+	{
+		logging_printf("stdout is socket\n");
+	}
+	else
+	{
+		logging_printf("stdout is not socket\n");
+	}
 
-	if (inetd_mode || serve_mode)
+
+	if (inetd_mode || serve_mode) {
 		return execute();
+	}
 
 	if (detach)
 		daemonize();
