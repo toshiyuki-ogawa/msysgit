@@ -782,8 +782,8 @@ static int start_daemon_as_service(int incomming,
 		snprintf(str_buffer, sizeof(str_buffer), 
 			"_WIN_SOCK_IO={%d, %d}", 0, 1);
 		env_buffer_add(&end_buf, str_buffer);
-		env = env_buffer_copy
-
+		env = env_buffer_copy_env(&env_buf);
+		env_buffer_close(&env_buf);
 	}
 	
 	cld.in = -1;
@@ -793,11 +793,18 @@ static int start_daemon_as_service(int incomming,
 	if (start_command(&cld))
 		logerror("unable to fork");
 	else {
+		WSAPROTOCOL_INFO pi;
 		if (WSADuplicateSocket(fd_to_socket(incoming),
-			cld.pid, &protocol_info) == 0) {
-			add_child(&cld, addr, addrlen);
-			
-
+			cld.pid, &pi) == 0) {
+			ssize_t ws;
+			ws = xwrite(cld.in, &pi, 
+				sizeof(pi));
+			if (ws == sizeof(pi)) {
+				add_child(&cld, addr, addrlen);
+			}
+			else {
+				kill(cls.pid, SIGTERM);
+			}
 		}
 		else {
 			kill(cld.pid, SIGTERM);
@@ -805,6 +812,58 @@ static int start_daemon_as_service(int incomming,
 	}
 	
 	close(incoming);
+}
+static int init_io()
+{
+	int result;
+	char *sock_info;
+	sock_info = getenv("_WIN_SOCK_IO");	
+	if (sock_info) {
+		char *token;
+		WSAPROTOCOL_INFO pi;
+		SOCKET sock;
+		int fd[2] = { -1, -1 };
+
+		sock_info = xstrdup(sock_info);	
+		token = strtok(sock_info, "{");
+		if (token) {
+			char *end_ptr
+			long val;
+			val = strtol(token, &end_ptr, 10);
+			if (end_ptr != token) {
+				fd[0] = (int)val;
+			}
+			token = strtok(NULL, ",");
+			if (token) {
+				val = strtol(token, &end_ptr, 10);
+				if (end_ptr != token) {
+					fd[1] = (int)val;
+				}
+			}
+		}
+		{
+			ssize_t rs;
+			rs = xread(0, &pi, sizeof(pi));
+			result = rs == sizeof(pi) ? 0 : -1
+		}
+		if (result == 0) {
+			sock = WSASocket(FROM_PROTOCOL_INFO, 
+				FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, 
+				&pi, 0, 0);
+			result = sock != INVALID_SOCKET ? 0 : -1;
+		} else {
+			sock = NULL;
+		}
+		if (result == 0) {
+			int sock_fd = _open_osfhandle(sock);	
+			if (fd[0] == 0) {
+				dup2(sock_fd, 0);
+			}
+			if (fd[1] != -1) {
+				dup2(sock_fd, fd[1]);
+			}
+		}
+	}
 }
 #endif
 

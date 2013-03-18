@@ -80,4 +80,48 @@ void set_socket_to_time_wait(int fd)
 {
 }
 #endif
+	struct child_process cld;
+	char **proc_env;
+	memset(&cld, 0, sizeof(cld));
+	cld.env = (const char **)env;
+	cld.argv = (const char **)cld_argv;
+
+	{
+		env_buffer env_buf;
+		char str_buffer[200];
+		memset(&env_buf, 0, sizeof(env_buf));
+		env_buffer_init(&env_buf, env);
+		snprintf(str_buffer, sizeof(str_buffer), 
+			"_WIN_SOCK_IO={%d, %d}", 0, 1);
+		env_buffer_add(&end_buf, str_buffer);
+		env = env_buffer_copy_env(&env_buf);
+		env_buffer_close(&env_buf);
+	}
+	
+	cld.in = -1;
+	cld.out = 0;
+
+
+	if (start_command(&cld))
+		logerror("unable to fork");
+	else {
+		WSAPROTOCOL_INFO pi;
+		if (WSADuplicateSocket(fd_to_socket(incoming),
+			cld.pid, &pi) == 0) {
+			ssize_t ws;
+			ws = xwrite(cld.in, &pi, 
+				sizeof(pi));
+			if (ws == sizeof(pi)) {
+				add_child(&cld, addr, addrlen);
+			}
+			else {
+				kill(cls.pid, SIGTERM);
+			}
+		}
+		else {
+			kill(cld.pid, SIGTERM);
+		}
+	}
+	
+	close(incoming);
 
