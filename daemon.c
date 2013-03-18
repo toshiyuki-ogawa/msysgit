@@ -4,7 +4,8 @@
 #include "run-command.h"
 #include "strbuf.h"
 #include "string-list.h"
-
+#include "socket-utils.h"
+#include "logging-util.h"
 #ifndef HOST_NAME_MAX
 #define HOST_NAME_MAX 256
 #endif
@@ -33,6 +34,7 @@ static const char daemon_usage[] =
 "           [--access-hook=<path>]\n"
 "           [--inetd | [--listen=<host_or_ipaddr>] [--port=<n>]\n"
 "                      [--detach] [--user=<user> [--group=<group>]]\n"
+"           [--sleep-sec-for-upload=<n>]"
 "           [<directory>...]";
 
 /* List of acceptable pathname prefixes */
@@ -59,6 +61,8 @@ static const char *user_path;
 /* Timeout, and initial timeout */
 static unsigned int timeout;
 static unsigned int init_timeout;
+
+static int sleep_sec_for_upload;
 
 static char *hostname;
 static char *canon_hostname;
@@ -429,11 +433,16 @@ static int upload_pack(void)
 {
 	/* Timeout as string */
 	char timeout_buf[64];
-	const char *argv[] = { "upload-pack", "--strict", NULL, ".", NULL };
+	char sleep_sec_buf[128];
+	const char *argv[] = { "upload-pack", "--strict", NULL, NULL, ".", NULL };
 
 	argv[2] = timeout_buf;
+	argv[3] = sleep_sec_buf;
 
 	snprintf(timeout_buf, sizeof timeout_buf, "--timeout=%u", timeout);
+	snprintf(sleep_sec_buf, sizeof sleep_sec_buf, 
+		"--sleep-sec-for-pack-objects=%d", sleep_sec_for_upload);
+
 	return run_service_command(argv);
 }
 
@@ -738,11 +747,71 @@ static void check_dead_children(void)
 		} else
 			cradle = &blanket->next;
 }
+#ifndef WIN32
+static int start_daemon_as_service(int incomming, 
+	const char **env, const char **argv)
+{
+	struct child_process cld = { NULL };
+	cld.env = (const char **)env;
+	cld.argv = (const char **)cld_argv;
+	cld.in = incoming;
+	cld.out = dup(incoming);
+
+
+	if (start_command(&cld))
+		logerror("unable to fork");
+	else
+		add_child(&cld, addr, addrlen);
+	close(incoming);
+}
+#else
+static int start_daemon_as_service(int incomming, 
+	const char **env, const char **argv)
+{
+	struct child_process cld;
+	char **proc_env;
+	memset(&cld, 0, sizeof(cld));
+	cld.env = (const char **)env;
+	cld.argv = (const char **)cld_argv;
+
+	{
+		env_buffer env_buf;
+		char str_buffer[200];
+		memset(&env_buf, 0, sizeof(env_buf));
+		env_buffer_init(&env_buf, env);
+		snprintf(str_buffer, sizeof(str_buffer), 
+			"_WIN_SOCK_IO={%d, %d}", 0, 1);
+		env_buffer_add(&end_buf, str_buffer);
+		env = env_buffer_copy
+
+	}
+	
+	cld.in = -1;
+	cld.out = 0;
+
+
+	if (start_command(&cld))
+		logerror("unable to fork");
+	else {
+		if (WSADuplicateSocket(fd_to_socket(incoming),
+			cld.pid, &protocol_info) == 0) {
+			add_child(&cld, addr, addrlen);
+			
+
+		}
+		else {
+			kill(cld.pid, SIGTERM);
+		}
+	}
+	
+	close(incoming);
+}
+#endif
+
 
 static char **cld_argv;
 static void handle(int incoming, struct sockaddr *addr, socklen_t addrlen)
 {
-	struct child_process cld = { NULL };
 	char addrbuf[300] = "REMOTE_ADDR=", portbuf[300];
 	char *env[] = { addrbuf, portbuf, NULL };
 
@@ -783,12 +852,15 @@ static void handle(int incoming, struct sockaddr *addr, socklen_t addrlen)
 	cld.in = incoming;
 	cld.out = dup(incoming);
 
+
 	if (start_command(&cld))
 		logerror("unable to fork");
 	else
 		add_child(&cld, addr, addrlen);
 	close(incoming);
 }
+
+
 
 static void child_handler(int signo)
 {
@@ -808,6 +880,18 @@ static int set_reuse_addr(int sockfd)
 		return 0;
 	return setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR,
 			  &on, sizeof(on));
+}
+
+static int set_linger(int sockfd)
+{
+#if 0
+	struct linger lg;
+	lg.l_onoff = 1;
+	lg.l_linger = 5;
+	return setsockopt(sockfd, SOL_SOCKET, SO_LINGER, &lg, sizeof(lg));
+#else
+	return 0;
+#endif
 }
 
 struct socketlist {
@@ -889,6 +973,11 @@ static int setup_named_sock(char *listen_addr, int listen_port, struct socketlis
 			close(sockfd);
 			continue;
 		}
+		if (set_linger(sockfd)) {
+			logerror("Could not set SO_LINGER: %s", strerror(errno));
+			close(sockfd);
+			continue;
+		}
 
 		if (bind(sockfd, ai->ai_addr, ai->ai_addrlen) < 0) {
 			logerror("Could not bind to %s: %s",
@@ -950,6 +1039,12 @@ static int setup_named_sock(char *listen_addr, int listen_port, struct socketlis
 		logerror("Could not set SO_REUSEADDR: %s", strerror(errno));
 		close(sockfd);
 		return 0;
+	}
+	
+	if (set_linger(sockfd)) {
+		logerror("Could not set SO_LINGER: %s", strerror(errno));
+		close(sockfd);
+		continue;
 	}
 
 	if ( bind(sockfd, (struct sockaddr *)&sin, sizeof sin) < 0 ) {
@@ -1302,6 +1397,9 @@ int main(int argc, char **argv)
 			informative_errors = 0;
 			continue;
 		}
+		if (!prefixcmp(arg, "--sleep-sec-for-upload=")) {
+			sleep_sec_for_upload = atoi(arg+23);
+		}
 		if (!strcmp(arg, "--")) {
 			ok_paths = &argv[i+1];
 			break;
@@ -1313,6 +1411,7 @@ int main(int argc, char **argv)
 		usage(daemon_usage);
 	}
 
+	logging_set_verbose(verbose);
 	if (log_syslog) {
 		openlog("git-daemon", LOG_PID, LOG_DAEMON);
 		set_die_routine(daemon_die);
@@ -1345,9 +1444,19 @@ int main(int argc, char **argv)
 		if (!freopen("/dev/null", "w", stderr))
 			die_errno("failed to redirect stderr to /dev/null");
 	}
+	if (is_socket(1))
+	{
+		logging_printf("stdout is socket\n");
+	}
+	else
+	{
+		logging_printf("stdout is not socket\n");
+	}
 
-	if (inetd_mode || serve_mode)
+
+	if (inetd_mode || serve_mode) {
 		return execute();
+	}
 
 	if (detach)
 		daemonize();
