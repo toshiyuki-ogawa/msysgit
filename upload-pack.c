@@ -12,6 +12,7 @@
 #include "run-command.h"
 #include "sigchain.h"
 #include "version.h"
+#include "socket-utils.h"
 
 static const char upload_pack_usage[] = "git upload-pack [--strict] [--timeout=<n>] <dir>";
 
@@ -785,6 +786,9 @@ int main(int argc, char **argv)
 	char *dir;
 	int i;
 	int strict = 0;
+	if (setup_io_care_socket()) {
+		die("failed to initialize io descripter ");
+	}
 
 	git_setup_gettext();
 

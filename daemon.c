@@ -409,7 +409,7 @@ static void copy_to_log(int fd)
 	strbuf_release(&line);
 	fclose(fp);
 }
-
+#ifndef WIN32
 static int run_service_command(const char **argv)
 {
 	struct child_process cld;
@@ -428,7 +428,31 @@ static int run_service_command(const char **argv)
 
 	return finish_command(&cld);
 }
+#else
+static int run_service_command(const char **argv)
+{
+	struct child_process cld;
+	if (is_socket(1)) {
+		if (start_command_socket_1(argv, env, 1, &cld))
+			return -1;
+	} 
+	else {
+		memset(&cld, 0, sizeof(cld));
+		cld.argv = argv;
+		cld.git_cmd = 1;
+		cld.err = -1;
+		if (start_command(&cld))
+			return -1;
+	}
 
+	close(0);
+	close(1);
+
+	copy_to_log(cld.err);
+
+	return finish_command(&cld);
+}
+#endif
 static int upload_pack(void)
 {
 	/* Timeout as string */
@@ -769,101 +793,15 @@ static int start_daemon_as_service(int incomming,
 	const char **env, const char **argv)
 {
 	struct child_process cld;
-	char **proc_env;
-	memset(&cld, 0, sizeof(cld));
-	cld.env = (const char **)env;
-	cld.argv = (const char **)cld_argv;
-
-	{
-		env_buffer env_buf;
-		char str_buffer[200];
-		memset(&env_buf, 0, sizeof(env_buf));
-		env_buffer_init(&env_buf, env);
-		snprintf(str_buffer, sizeof(str_buffer), 
-			"_WIN_SOCK_IO={%d, %d}", 0, 1);
-		env_buffer_add(&end_buf, str_buffer);
-		env = env_buffer_copy_env(&env_buf);
-		env_buffer_close(&env_buf);
-	}
-	
-	cld.in = -1;
-	cld.out = 0;
-
-
-	if (start_command(&cld))
+	int result;
+	result = start_command_socket_1(env, argv, incomming, &cld);
+	if (result)
 		logerror("unable to fork");
 	else {
-		WSAPROTOCOL_INFO pi;
-		if (WSADuplicateSocket(fd_to_socket(incoming),
-			cld.pid, &pi) == 0) {
-			ssize_t ws;
-			ws = xwrite(cld.in, &pi, 
-				sizeof(pi));
-			if (ws == sizeof(pi)) {
-				add_child(&cld, addr, addrlen);
-			}
-			else {
-				kill(cls.pid, SIGTERM);
-			}
-		}
-		else {
-			kill(cld.pid, SIGTERM);
-		}
+		add_child(&cld, addr, addrlen);
 	}
 	
 	close(incoming);
-}
-static int init_io()
-{
-	int result;
-	char *sock_info;
-	sock_info = getenv("_WIN_SOCK_IO");	
-	if (sock_info) {
-		char *token;
-		WSAPROTOCOL_INFO pi;
-		SOCKET sock;
-		int fd[2] = { -1, -1 };
-
-		sock_info = xstrdup(sock_info);	
-		token = strtok(sock_info, "{");
-		if (token) {
-			char *end_ptr
-			long val;
-			val = strtol(token, &end_ptr, 10);
-			if (end_ptr != token) {
-				fd[0] = (int)val;
-			}
-			token = strtok(NULL, ",");
-			if (token) {
-				val = strtol(token, &end_ptr, 10);
-				if (end_ptr != token) {
-					fd[1] = (int)val;
-				}
-			}
-		}
-		{
-			ssize_t rs;
-			rs = xread(0, &pi, sizeof(pi));
-			result = rs == sizeof(pi) ? 0 : -1
-		}
-		if (result == 0) {
-			sock = WSASocket(FROM_PROTOCOL_INFO, 
-				FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, 
-				&pi, 0, 0);
-			result = sock != INVALID_SOCKET ? 0 : -1;
-		} else {
-			sock = NULL;
-		}
-		if (result == 0) {
-			int sock_fd = _open_osfhandle(sock);	
-			if (fd[0] == 0) {
-				dup2(sock_fd, 0);
-			}
-			if (fd[1] != -1) {
-				dup2(sock_fd, fd[1]);
-			}
-		}
-	}
 }
 #endif
 
@@ -1327,7 +1265,9 @@ int main(int argc, char **argv)
 	int detach = 0;
 	struct credentials *cred = NULL;
 	int i;
-
+	if (setup_io_care_socket()) {
+		die("failed to initialize io descripter ");
+	}
 	git_setup_gettext();
 
 	git_extract_argv0_path(argv[0]);

@@ -1,7 +1,7 @@
 #include "env-utils.h"
 #include "xmalloc.h"
 
-int env_buffer_init(env_buffer *self, char **env_src)
+int env_buffer_init(env_buffer *self, const char * const* env_src)
 {
 	int result;
 	if (self) {
