@@ -504,6 +504,7 @@ PROGRAM_OBJS += shell.o
 PROGRAM_OBJS += show-index.o
 PROGRAM_OBJS += upload-pack.o
 PROGRAM_OBJS += remote-testsvn.o
+PROGRAM_OBJS += close-socket.o
 
 # Binary suffix, set to .exe for Windows builds
 X =
@@ -532,6 +533,7 @@ TEST_PROGRAMS_NEED_X += test-sigchain
 TEST_PROGRAMS_NEED_X += test-string-list
 TEST_PROGRAMS_NEED_X += test-subprocess
 TEST_PROGRAMS_NEED_X += test-svn-fe
+TEST_PROGRAMS_NEED_X += test-env-utils
 
 TEST_PROGRAMS = $(patsubst %,%$X,$(TEST_PROGRAMS_NEED_X))
 
@@ -639,6 +641,7 @@ LIB_H += delta.h
 LIB_H += diff.h
 LIB_H += diffcore.h
 LIB_H += dir.h
+LIB_H += evn-utils.h
 LIB_H += exec_cmd.h
 LIB_H += fetch-pack.h
 LIB_H += fmt-merge-msg.h
@@ -755,6 +758,7 @@ LIB_OBJS += dir.o
 LIB_OBJS += editor.o
 LIB_OBJS += entry.o
 LIB_OBJS += environment.o
+LIB_OBJS += env-utils.o
 LIB_OBJS += exec_cmd.o
 LIB_OBJS += fetch-pack.o
 LIB_OBJS += fsck.o

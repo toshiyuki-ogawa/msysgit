@@ -409,7 +409,7 @@ static void copy_to_log(int fd)
 	strbuf_release(&line);
 	fclose(fp);
 }
-
+#ifndef WIN32
 static int run_service_command(const char **argv)
 {
 	struct child_process cld;
@@ -428,7 +428,31 @@ static int run_service_command(const char **argv)
 
 	return finish_command(&cld);
 }
+#else
+static int run_service_command(const char **argv)
+{
+	struct child_process cld;
+	if (is_socket(1)) {
+		if (start_command_socket_1(argv, NULL, 1, -1, 1, &cld))
+			return -1;
+	} 
+	else {
+		memset(&cld, 0, sizeof(cld));
+		cld.argv = argv;
+		cld.git_cmd = 1;
+		cld.err = -1;
+		if (start_command(&cld))
+			return -1;
+	}
 
+	close(0);
+	close(1);
+
+	copy_to_log(cld.err);
+
+	return finish_command(&cld);
+}
+#endif
 static int upload_pack(void)
 {
 	/* Timeout as string */
@@ -748,63 +772,43 @@ static void check_dead_children(void)
 			cradle = &blanket->next;
 }
 #ifndef WIN32
-static int start_daemon_as_service(int incomming, 
-	const char **env, const char **argv)
+static int start_daemon_as_service(
+	int incoming, struct sockaddr *addr, socklen_t addrlen,
+	const char * const *env, const char * const *argv)
 {
 	struct child_process cld = { NULL };
+	int result;
 	cld.env = (const char **)env;
-	cld.argv = (const char **)cld_argv;
+	cld.argv = (const char **)argv;
 	cld.in = incoming;
 	cld.out = dup(incoming);
 
-
-	if (start_command(&cld))
+	result = start_command(&cld);
+	if (result)
 		logerror("unable to fork");
 	else
 		add_child(&cld, addr, addrlen);
 	close(incoming);
+	return result;
 }
 #else
-static int start_daemon_as_service(int incomming, 
-	const char **env, const char **argv)
+static int start_daemon_as_service(int incoming, 
+	struct sockaddr *addr, socklen_t addrlen,
+	const char * const *env, const char * const *argv)
 {
 	struct child_process cld;
-	char **proc_env;
-	memset(&cld, 0, sizeof(cld));
-	cld.env = (const char **)env;
-	cld.argv = (const char **)cld_argv;
-
-	{
-		env_buffer env_buf;
-		char str_buffer[200];
-		memset(&env_buf, 0, sizeof(env_buf));
-		env_buffer_init(&env_buf, env);
-		snprintf(str_buffer, sizeof(str_buffer), 
-			"_WIN_SOCK_IO={%d, %d}", 0, 1);
-		env_buffer_add(&end_buf, str_buffer);
-		env = env_buffer_copy
-
-	}
-	
-	cld.in = -1;
-	cld.out = 0;
-
-
-	if (start_command(&cld))
+	int result;
+	logging_printf("start_daemon_as_service\n");
+	result = start_command_socket_1(argv, env, incoming, 0, 0, &cld);
+	if (result)
 		logerror("unable to fork");
 	else {
-		if (WSADuplicateSocket(fd_to_socket(incoming),
-			cld.pid, &protocol_info) == 0) {
-			add_child(&cld, addr, addrlen);
-			
-
-		}
-		else {
-			kill(cld.pid, SIGTERM);
-		}
+		add_child(&cld, addr, addrlen);
 	}
 	
+	logging_printf("start_daemon_as_service2\n");
 	close(incoming);
+	return result;
 }
 #endif
 
@@ -846,18 +850,9 @@ static void handle(int incoming, struct sockaddr *addr, socklen_t addrlen)
 		    ntohs(sin6_addr->sin6_port));
 #endif
 	}
-
-	cld.env = (const char **)env;
-	cld.argv = (const char **)cld_argv;
-	cld.in = incoming;
-	cld.out = dup(incoming);
-
-
-	if (start_command(&cld))
-		logerror("unable to fork");
-	else
-		add_child(&cld, addr, addrlen);
-	close(incoming);
+	start_daemon_as_service(incoming, addr, addrlen, 
+		(const char * const *)env, 
+		(const char * const *)cld_argv);
 }
 
 
@@ -1268,7 +1263,10 @@ int main(int argc, char **argv)
 	int detach = 0;
 	struct credentials *cred = NULL;
 	int i;
-
+	logging_set_verbose(1);
+	if (setup_io_care_socket()) {
+		die("failed to initialize io descripter\n");
+	}
 	git_setup_gettext();
 
 	git_extract_argv0_path(argv[0]);
@@ -1411,7 +1409,7 @@ int main(int argc, char **argv)
 		usage(daemon_usage);
 	}
 
-	logging_set_verbose(verbose);
+	/*logging_set_verbose(verbose);*/
 	if (log_syslog) {
 		openlog("git-daemon", LOG_PID, LOG_DAEMON);
 		set_die_routine(daemon_die);

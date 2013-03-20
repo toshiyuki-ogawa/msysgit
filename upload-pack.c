@@ -14,6 +14,8 @@
 #include "version.h"
 #include "socket-utils.h"
 #include "logging-util.h"
+#include "socket-utils.h"
+
 static const char upload_pack_usage[] = "git upload-pack [--strict] [--timeout=<n>] <dir>";
 
 /* bits #0..7 in revision.h, #8..10 in commit.c */
@@ -794,6 +796,9 @@ int main(int argc, char **argv)
 	int i;
 	int strict = 0;
 
+	if (setup_io_care_socket()) {
+		die("can't setup io descripters.\n");
+	}
 	git_setup_gettext();
 
 	packet_trace_identity("upload-pack");
@@ -846,5 +851,16 @@ int main(int argc, char **argv)
 	if (getenv("GIT_DEBUG_SEND_PACK"))
 		debug_fd = atoi(getenv("GIT_DEBUG_SEND_PACK"));
 	upload_pack();
+#ifdef EMULATE_TIME_WAIT_SOCKET
+	trace_printf("is_socket(1) = %d\n", is_socket(1));
+	trace_printf("emulate_time_wait_socket\n");
+	if (is_socket(1)) {
+		trace_printf("set_socket_to_time_wait\n");
+		set_socket_to_time_wait(1, 1);
+	}
+#else
+	trace_printf("not emulate_time_wait_socket\n");
+#endif
+
 	return 0;
 }

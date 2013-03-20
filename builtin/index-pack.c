@@ -1608,6 +1608,7 @@ int cmd_index_pack(int argc, const char **argv, const char *prefix)
 
 	objects = xcalloc(nr_objects + 1, sizeof(struct object_entry));
 	deltas = xcalloc(nr_objects, sizeof(struct delta_entry));
+	sleep(10);
 	parse_pack_objects(pack_sha1);
 	resolve_deltas();
 	conclude_pack(fix_thin_pack, curr_pack, pack_sha1);

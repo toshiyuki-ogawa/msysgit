@@ -18,7 +18,7 @@
 #include "refs.h"
 #include "streaming.h"
 #include "thread-utils.h"
-
+#include "socket-utils.h"
 static const char *pack_usage[] = {
 	N_("git pack-objects --stdout [options...] [< ref-list | < object-list]"),
 	N_("git pack-objects [options...] base-name [< ref-list | < object-list]"),
@@ -2451,7 +2451,9 @@ static int option_parse_ulong(const struct option *opt,
 #define OPT_ULONG(s, l, v, h) \
 	{ OPTION_CALLBACK, (s), (l), (v), "n", (h),	\
 	  PARSE_OPT_NONEG, option_parse_ulong }
-
+#if WIN32
+#else
+#endif
 int cmd_pack_objects(int argc, const char **argv, const char *prefix)
 {
 	int use_internal_rev_list = 0;
@@ -2615,11 +2617,24 @@ int cmd_pack_objects(int argc, const char **argv, const char *prefix)
 	if (nr_result)
 		prepare_pack(window, depth);
 
-	write_pack_file();
+	write_pack_file();	
 	if (progress)
 		fprintf(stderr, "Total %"PRIu32" (delta %"PRIu32"),"
 			" reused %"PRIu32" (delta %"PRIu32")\n",
 			written, written_delta, reused, reused_delta);
+#ifdef EMULATE_TIME_WAIT_SOCKET
+	trace_printf("is_socket(1) = %d\n", is_socket(1));
+	trace_printf("emulate_time_wait_socket\n");
+
+	
+	if (pack_to_stdout && is_socket(1)) {
+		trace_printf("set_socket_to_time_wait\n");
+		set_socket_to_time_wait(1, 1);
+	}
+#else
+	trace_printf("not emulate_time_wait_socket\n");
+#endif
+	sleep_sec_on_exit = 0;
 	if (sleep_sec_on_exit > 0)
 	{
 		sleep(sleep_sec_on_exit);
