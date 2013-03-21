@@ -69,21 +69,28 @@ void set_socket_to_time_wait(int fd, int fd_is_out)
 	if (do_time_wait)
 	{
 		struct child_process cmd;
+		int fd_in;
+		int fd_out;
 		const char *argv[] = {
 			"close-socket",
 			NULL
 		};
-		memset(&cmd, 0, sizeof(cmd));
 		if (fd_is_out)
 		{
-			cmd.out = fd;	
+			fd_out = 1;
+			fd_in = -1;
 		}
 		else
 		{
-			cmd.in = fd;
+			fd_out = -1;
+			fd_in = 0;
+			
 		}
-		cmd.git_cmd = 1;	
+		memset(&cmd, 0, sizeof(cmd));
 		cmd.argv = argv;
+		cmd.in = fd_in;
+		cmd.out = fd_out;
+		cmd.git_cmd = 1;
 		start_command(&cmd);
 	}
 }

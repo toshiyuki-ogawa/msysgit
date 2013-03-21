@@ -1,5 +1,5 @@
-#include <time.h>
 #include "cache.h"
+#include <time.h>
 #include "socket-utils.h"
 
 static int wait_for_time_out(int fd0, int fd1);
@@ -7,7 +7,7 @@ static time_t get_wait_time(int fd0, int fd1);
 
 static time_t get_wait_time(int fd0, int fd1)
 {
-	return 10;
+	return 60 * 1;
 }
 static int wait_for_time_out(int fd0, int fd1)
 {
@@ -25,9 +25,6 @@ int main(int argc, char** argv)
 {
 	int result;
 	result = 0;
-	if (is_socket(1) || is_socket(0))
-	{
-		result = wait_for_time_out(0, 1);
-	}
+	result = wait_for_time_out(0, 1);
 	return result;
 }

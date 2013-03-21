@@ -14,7 +14,6 @@
 #include "version.h"
 #include "socket-utils.h"
 #include "logging-util.h"
-#include "socket-utils.h"
 
 static const char upload_pack_usage[] = "git upload-pack [--strict] [--timeout=<n>] <dir>";
 
@@ -839,7 +838,7 @@ int main(int argc, char **argv)
 
 	if (i != argc-1)
 		usage(upload_pack_usage);
-
+	logging_set_verbose(1);
 	setup_path();
 
 	dir = argv[i];
@@ -852,10 +851,10 @@ int main(int argc, char **argv)
 		debug_fd = atoi(getenv("GIT_DEBUG_SEND_PACK"));
 	upload_pack();
 #ifdef EMULATE_TIME_WAIT_SOCKET
-	trace_printf("is_socket(1) = %d\n", is_socket(1));
-	trace_printf("emulate_time_wait_socket\n");
+	logging_printf("is_socket(1) = %d\n", is_socket(1));
+	logging_printf("emulate_time_wait_socket\n");
 	if (is_socket(1)) {
-		trace_printf("set_socket_to_time_wait\n");
+		logging_printf("set_socket_to_time_wait\n");
 		set_socket_to_time_wait(1, 1);
 	}
 #else
