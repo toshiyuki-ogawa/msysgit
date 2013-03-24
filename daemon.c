@@ -5,6 +5,7 @@
 #include "strbuf.h"
 #include "string-list.h"
 #include "socket-utils.h"
+#include "winsock-proc.h"
 #include "logging-util.h"
 #ifndef HOST_NAME_MAX
 #define HOST_NAME_MAX 256
@@ -429,21 +430,47 @@ static int run_service_command(const char **argv)
 	return finish_command(&cld);
 }
 #else
-static int run_service_command(const char **argv)
+static int run_service_command_with_socket_fd(const char **argv)
+{
+	int result;
+	winsock_proc *ws_proc;
+	winsock_proc_cmd cmd;
+	memset(&cmd, 0, sizeof(cmd));
+
+	cmd.argv = argv;
+	cmd.socket_in_fd = 0;
+	cmd.socket_out_fd = 1;
+	cmd.close_in_fd = 1;
+	cmd.initial_err_fd = -1;
+	cmd.git_cmd = 1;
+
+	ws_proc = winsock_proc_start_cmd(&cmd);
+	if (ws_proc) {
+		close(0);
+		close(1);
+
+		copy_to_log(winsock_proc_get_process_info(ws_proc)->err);
+
+		result = finish_command(
+			winsock_proc_get_process_info(ws_proc));
+		winsock_proc_free(ws_proc);
+
+	}
+	else {
+		result = -1;
+	}
+	return result;
+}
+static int run_service_command_with_fd(const char **argv)
 {
 	struct child_process cld;
-	if (is_socket(1)) {
-		if (start_command_socket_1(argv, NULL, 1, -1, 1, &cld))
-			return -1;
-	} 
-	else {
-		memset(&cld, 0, sizeof(cld));
-		cld.argv = argv;
-		cld.git_cmd = 1;
-		cld.err = -1;
-		if (start_command(&cld))
-			return -1;
-	}
+
+	memset(&cld, 0, sizeof(cld));
+	cld.argv = argv;
+	cld.git_cmd = 1;
+	cld.err = -1;
+	if (start_command(&cld))
+		return -1;
 
 	close(0);
 	close(1);
@@ -451,6 +478,19 @@ static int run_service_command(const char **argv)
 	copy_to_log(cld.err);
 
 	return finish_command(&cld);
+}
+static int run_service_command(const char **argv)
+{
+
+	int result;
+
+	if (is_socket(1)) {
+		result = run_service_command_with_socket_fd(argv);
+	} 
+	else {
+		result = run_service_command_with_fd(argv);
+	}
+	return result;
 }
 #endif
 static int upload_pack(void)
@@ -796,17 +836,30 @@ static int start_daemon_as_service(int incoming,
 	struct sockaddr *addr, socklen_t addrlen,
 	const char * const *env, const char * const *argv)
 {
-	struct child_process cld;
+	winsock_proc_cmd cmd;
+	winsock_proc *ws_proc;
 	int result;
-	logging_printf("start_daemon_as_service\n");
-	result = start_command_socket_1(argv, env, incoming, 0, 0, &cld);
-	if (result)
-		logerror("unable to fork");
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.argv = argv;
+	cmd.env = env;
+	cmd.socket_fd = incoming;
+	cmd.socket_in_fd = 0;
+	cmd.socket_out_fd = 1;
+	cmd.close_in_fd = 1;
+
+	
+	ws_proc = winsock_proc_start_cmd(&cmd);
+	if (ws_proc) {
+		add_child(winsock_proc_get_process_info(ws_proc), 
+			addr, addrlen);
+		result = 0;
+		winsock_proc_free(ws_proc);
+	}
 	else {
-		add_child(&cld, addr, addrlen);
+		logerror("unable to fork");
+
 	}
 	
-	logging_printf("start_daemon_as_service2\n");
 	close(incoming);
 	return result;
 }
@@ -1264,7 +1317,7 @@ int main(int argc, char **argv)
 	struct credentials *cred = NULL;
 	int i;
 	logging_set_verbose(1);
-	if (setup_io_care_socket()) {
+	if (winproc_setup_io_care_socket()) {
 		die("failed to initialize io descripter\n");
 	}
 	git_setup_gettext();

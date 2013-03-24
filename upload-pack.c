@@ -14,7 +14,7 @@
 #include "version.h"
 #include "socket-utils.h"
 #include "logging-util.h"
-
+#include "winsock-proc.h"
 static const char upload_pack_usage[] = "git upload-pack [--strict] [--timeout=<n>] <dir>";
 
 /* bits #0..7 in revision.h, #8..10 in commit.c */
@@ -795,7 +795,7 @@ int main(int argc, char **argv)
 	int i;
 	int strict = 0;
 
-	if (setup_io_care_socket()) {
+	if (winproc_setup_io_care_socket()) {
 		die("can't setup io descripters.\n");
 	}
 	git_setup_gettext();
