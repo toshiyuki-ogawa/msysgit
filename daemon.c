@@ -430,6 +430,13 @@ static int run_service_command(const char **argv)
 	return finish_command(&cld);
 }
 #else
+static int async_copy_to_log(int in, int out, void *data)
+{
+	int result;
+	result = 0;
+	copy_to_log(out);
+	return result;
+}
 static int run_service_command_with_socket_fd(const char **argv)
 {
 	int result;
@@ -446,15 +453,26 @@ static int run_service_command_with_socket_fd(const char **argv)
 
 	ws_proc = winsock_proc_start_cmd(&cmd);
 	if (ws_proc) {
+		struct async async;
 		close(0);
 		close(1);
+		memset(&async, 0, sizeof(async));
 
+		loginfo("process copy_to_log\n");
+
+		async.out = winsock_proc_get_process_info(ws_proc)->err;
+		async.proc = async_copy_to_log;
+		/*start_async(&async); */
 		copy_to_log(winsock_proc_get_process_info(ws_proc)->err);
-
+		loginfo("process finish_command\n");
 		result = finish_command(
 			winsock_proc_get_process_info(ws_proc));
+		loginfo("process finish_command done\n");
+
+		/*finish_async(&async);*/
 		winsock_proc_free(ws_proc);
 
+		loginfo("daemon finished command(%s)\n", cmd.argv[0]);
 	}
 	else {
 		result = -1;
@@ -490,6 +508,7 @@ static int run_service_command(const char **argv)
 	else {
 		result = run_service_command_with_fd(argv);
 	}
+	loginfo("finished run_service_command\n");
 	return result;
 }
 #endif
@@ -861,6 +880,7 @@ static int start_daemon_as_service(int incoming,
 	}
 	
 	close(incoming);
+	logging_printf("daemon closed incoming.\n");
 	return result;
 }
 #endif

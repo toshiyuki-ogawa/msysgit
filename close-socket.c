@@ -24,6 +24,8 @@ static int wait_for_time_out(int fd0, int fd1)
 int main(int argc, char** argv)
 {
 	int result;
+	
+	close(2);
 	result = 0;
 	result = wait_for_time_out(0, 1);
 	return result;

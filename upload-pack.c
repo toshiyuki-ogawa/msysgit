@@ -838,7 +838,7 @@ int main(int argc, char **argv)
 
 	if (i != argc-1)
 		usage(upload_pack_usage);
-	logging_set_verbose(1);
+	logging_set_verbose(0);
 	setup_path();
 
 	dir = argv[i];
@@ -856,6 +856,7 @@ int main(int argc, char **argv)
 	if (is_socket(1)) {
 		logging_printf("set_socket_to_time_wait\n");
 		set_socket_to_time_wait(1, 1);
+		logging_printf("set_socket_to_time_wait finised\n");
 	}
 #else
 	trace_printf("not emulate_time_wait_socket\n");

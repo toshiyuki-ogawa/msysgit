@@ -3,9 +3,10 @@
 test_description='test fetching over git protocol'
 . ./test-lib.sh
 
-LIB_GIT_DAEMON_PORT=${LIB_GIT_DAEMON_PORT-5570}
+LIB_GIT_DAEMON_PORT=${LIB_GIT_DAEMON_PORT-5573}
 . "$TEST_DIRECTORY"/lib-git-daemon.sh
-start_git_daemon
+start_git_daemon --syslog
+
 
 test_expect_success 'setup repository' '
 	echo content >file &&

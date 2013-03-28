@@ -1,4 +1,5 @@
 #include "cache.h"
+#include "exec_cmd.h"
 #include "socket-utils.h"
 #include "run-command.h"
 
@@ -69,25 +70,27 @@ void set_socket_to_time_wait(int fd, int fd_is_out)
 		int fd_in;
 		int fd_out;
 		const char *argv[] = {
-			"close-socket",
+			"git-close-socket",
 			NULL
 		};
 		if (fd_is_out)
 		{
-			fd_out = 1;
-			fd_in = -1;
+			fd_out = fd;
+			fd_in = 0;
 		}
 		else
 		{
-			fd_out = -1;
-			fd_in = 0;
-			
+			fd_in = fd;
+			fd_out = 0;
 		}
 		memset(&cmd, 0, sizeof(cmd));
 		cmd.argv = argv;
 		cmd.in = fd_in;
 		cmd.out = fd_out;
-		cmd.git_cmd = 1;
+		cmd.err = 2;
+		cmd.git_cmd = 0;
+		cmd.use_shell = 1;
+		cmd.dir = git_exec_path();
 		start_command(&cmd);
 	}
 }
