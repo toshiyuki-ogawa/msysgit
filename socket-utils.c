@@ -2,9 +2,9 @@
 #include "exec_cmd.h"
 #include "socket-utils.h"
 #include "run-command.h"
-
 #ifndef WIN32
 #else
+#include "win-fd.h"
 #include <io.h>
 #endif
 
@@ -67,10 +67,11 @@ void set_socket_to_time_wait(int fd, int fd_is_out)
 	if (do_time_wait)
 	{
 		struct child_process cmd;
+		win_fd_status *fd_status;
 		int fd_in;
 		int fd_out;
 		const char *argv[] = {
-			"git-close-socket",
+			"close-socket",
 			NULL
 		};
 		if (fd_is_out)
@@ -87,11 +88,11 @@ void set_socket_to_time_wait(int fd, int fd_is_out)
 		cmd.argv = argv;
 		cmd.in = fd_in;
 		cmd.out = fd_out;
-		cmd.err = 2;
-		cmd.git_cmd = 0;
-		cmd.use_shell = 1;
+		cmd.git_cmd = 1;
 		cmd.dir = git_exec_path();
+		fd_status = win_fd_apply_inheritance_1(0, 2, -1);
 		start_command(&cmd);
+		win_fd_restore_and_free(fd_status);
 	}
 }
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='signals work as we expect'
+test_description='env-util functions work as we expect'
 . ./test-lib.sh
 cat >expect <<EOF
 env_buffer_init finished

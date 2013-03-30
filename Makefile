@@ -534,7 +534,6 @@ TEST_PROGRAMS_NEED_X += test-string-list
 TEST_PROGRAMS_NEED_X += test-subprocess
 TEST_PROGRAMS_NEED_X += test-svn-fe
 TEST_PROGRAMS_NEED_X += test-env-utils
-
 TEST_PROGRAMS = $(patsubst %,%$X,$(TEST_PROGRAMS_NEED_X))
 
 # List built-in command $C whose implementation cmd_$C() is not in
@@ -633,6 +632,7 @@ LIB_H += compat/win32/dirent.h
 LIB_H += compat/win32/pthread.h
 LIB_H += compat/win32/syslog.h
 LIB_H += compat/winsock-proc.h
+LIB_H += compat/win-fd.h
 LIB_H += connected.h
 LIB_H += convert.h
 LIB_H += credential.h
@@ -1451,12 +1451,14 @@ ifneq (,$(findstring MINGW,$(uname_S)))
 	COMPAT_OBJS += compat/mingw.o compat/winansi.o \
 		compat/win32/pthread.o compat/win32/syslog.o \
 		compat/win32/dirent.o \
-		compat/winsock-proc.o
+		compat/winsock-proc.o \
+		compat/win-fd.o
 	BASIC_LDFLAGS += -Wl,--large-address-aware
 	EXTLIBS += -lws2_32
 	GITLIBS += git.res
 	PTHREAD_LIBS =
 	RC = windres -O coff
+	TEST_PROGRAMS_NEED_X += test-win-fd
 	X = .exe
 	SPARSE_FLAGS = -Wno-one-bit-signed-bitfield
 ifneq (,$(wildcard ../THIS_IS_MSYSGIT))

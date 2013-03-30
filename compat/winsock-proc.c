@@ -6,7 +6,7 @@
 #include "argv-array.h"
 #include "run-command.h"
 #include "socket-utils.h"
-
+#include "win-fd.h"
 #ifdef WIN32
 #define fd_to_socket(fd) ((SOCKET)_get_osfhandle(fd))
 #else
@@ -100,6 +100,7 @@ winsock_proc_start_cmd(const winsock_proc_cmd *cmd)
 	}
 
 	if (state == 0) {
+		win_fd_status *fd_status;
 		result->child_process->env = (const char **)env;
 		result->child_process->argv = (const char **)argv;
 		result->child_process->in = -1;
@@ -107,7 +108,9 @@ winsock_proc_start_cmd(const winsock_proc_cmd *cmd)
 		result->child_process->err = cmd->initial_err_fd;
 		result->child_process->git_cmd = cmd->git_cmd;
 		result->child_process->dir = dir;
+		fd_status = win_fd_apply_inheritance_1(0, 0, -1);
 		state = start_command(result->child_process);
+		win_fd_restore_and_free(fd_status);
 		env = NULL;
 		argv = NULL;
 		dir = NULL;
