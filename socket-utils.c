@@ -1,12 +1,20 @@
-#include "socket-utils.h"
 #include "cache.h"
+#include "exec_cmd.h"
+#include "socket-utils.h"
 #include "run-command.h"
-#include "env-utils.h"
 #ifndef WIN32
 #else
+#include "win-fd.h"
 #include <io.h>
 #endif
 
+#ifdef WIN32
+#define fd_to_socket(fd) ((SOCKET)_get_osfhandle(fd))
+#else
+#define fd_to_socket(fd) (fd)
+#endif
+
+#ifndef WIN32
 int
 is_socket(int fd)
 {
@@ -31,6 +39,7 @@ is_socket(int fd)
 	int result;
 	int optlen;
 	optlen = sizeof(st);
+
 	if (getsockopt(fd_to_socket(fd), SOL_SOCKET, SO_TYPE, (char *)&st, &optlen)) {
 		result = 0;	
 	} else {
@@ -58,22 +67,32 @@ void set_socket_to_time_wait(int fd, int fd_is_out)
 	if (do_time_wait)
 	{
 		struct child_process cmd;
+		win_fd_status *fd_status;
+		int fd_in;
+		int fd_out;
 		const char *argv[] = {
 			"close-socket",
 			NULL
 		};
-		memset(&cmd, 0, sizeof(cmd));
 		if (fd_is_out)
 		{
-			cmd.out = fd;	
+			fd_out = fd;
+			fd_in = 0;
 		}
 		else
 		{
-			cmd.in = fd;
+			fd_in = fd;
+			fd_out = 0;
 		}
-		cmd.git_cmd = 1;	
+		memset(&cmd, 0, sizeof(cmd));
 		cmd.argv = argv;
+		cmd.in = fd_in;
+		cmd.out = fd_out;
+		cmd.git_cmd = 1;
+		cmd.dir = git_exec_path();
+		fd_status = win_fd_apply_inheritance_1(0, 2, -1);
 		start_command(&cmd);
+		win_fd_restore_and_free(fd_status);
 	}
 }
 
@@ -82,130 +101,63 @@ void set_socket_to_time_wait(int fd)
 {
 }
 #endif
-int start_command_socket_0(const char * const *argv,
-	const char * const *env,
-	int socket, int fdin, int fdout,
-	struct child_process * cld)
+const char * socket_utils_strerror_0(int errnum)
 {
-	int result;
+	const static struct 
 	{
-		env_buffer env_buf;
-		char str_buffer[200];
-		memset(&env_buf, 0, sizeof(env_buf));
-		env_buffer_init(&env_buf, env);
-		snprintf(str_buffer, sizeof(str_buffer), 
-			"_WIN_SOCK_IO={%d, %d}", fdin, fdout);
-		env_buffer_add(&end_buf, str_buffer);
-		env = env_buffer_copy_env(&env_buf);
-		env_buffer_close(&env_buf);
-	}
-	memset(&cld, 0, sizeof(cld));
-
-	cld.env = (const char **)env;
-	cld.argv = (const char **)cld_argv;
-	cld.in = -1;
-	cld.out = 0;
-
-	result = start_command(&cld);
-	if (result == 0)
-	{
-		WSAPROTOCOL_INFO pi;
-		if (WSADuplicateSocket(fd_to_socket(incoming),
-			cld.pid, &pi) == 0) {
-			ssize_t ws;
-			ws = xwrite(cld.in, &pi, sizeof(pi));
-			if (ws == sizeof(pi)) {
-				result = 0;
-			}
-			else {
-				result = -1;
-				logerror("can't write PROTOCOL_INFO "
-					"correctly.");
-			}
-			
-		}
-		else {
-			logerror("failed to duplicate socket.");
-			result = -1;
-		}
-		if (result) {
-			kill(cls.pid, SIGTERM);
-			cls.pid = 0;
-		}	
-
-	}
-	else
-		logerror("unable to fork");
-	return result;	
-}
-int start_command_socket_1(const char * const *argv,
-	const char * const *env,
-	int socket, 
-	struct child_process * cld)
-{
-	return start_command_socket_0(argv, env, socket, 0, 1, cld);
-}
-int setup_io_care_socket()
-{
-	int result;
-	char *sock_info;
-	sock_info = getenv("_WIN_SOCK_IO");	
-	if (sock_info) {
-		char *token;
-		WSAPROTOCOL_INFO pi;
-		SOCKET sock;
-		int fd[2] = { -1, -1 };
-
-		sock_info = xstrdup(sock_info);	
-		token = strtok(sock_info, "{");
-		if (token) {
-			char *end_ptr
-			long val;
-			val = strtol(token, &end_ptr, 10);
-			if (end_ptr != token) {
-				fd[0] = (int)val;
-			}
-			token = strtok(NULL, ",");
-			if (token) {
-				val = strtol(token, &end_ptr, 10);
-				if (end_ptr != token) {
-					fd[1] = (int)val;
-				}
-			}
-		}
+		int number;
+		const char *message;
+	} number_message[] = {
 		{
-			ssize_t rs;
-			rs = xread(0, &pi, sizeof(pi));
-			if (rs == sizeof(pi)) {
-				result = 0;
-			}
-			else {
-				result = -1;
-				logerror("can't read PROTOCOL_INFO.");	
-			}
+			SOCK_UTIL_PROTOCOL_ERROR,
+			"protocol error"
 		}
-		if (result == 0) {
-			sock = WSASocket(FROM_PROTOCOL_INFO, 
-				FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, 
-				&pi, 0, 0);
-			result = sock != INVALID_SOCKET ? 0 : -1;
-		} else {
-			sock = NULL;
+	};
+	int i;
+	const char *result;
+	result = NULL;
+	for (i = 0; i < sizeof(number_message) / sizeof(number_message[0]);
+		i++) {
+		if (errnum == number_message[i].number) {
+			result = number_message[i].message;
+			break;
 		}
-		if (result == 0) {
-			int sock_fd = _open_osfhandle(sock);	
-			if (fd[0] != -1) {
-				dup2(sock_fd, fd[0]);
-			}
-			if (fd[1] != -1) {
-				dup2(sock_fd, fd[1]);
-			}
-			close(sock_fd);
-		}
-	}
-	else
-	{
-		result = 0;	
 	}
 	return result;
 }
+#if WIN32
+const char * socket_utils_strerror_win(int errnum)
+{
+	static char message_buffer[1024];
+	int state;
+	const char *result;
+	state = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, errnum, 0, 
+		message_buffer, sizeof(message_buffer), NULL);
+	result = state ? message_buffer : NULL;
+	return result;
+}
+#endif
+
+const char * socket_utils_strerror(int errnum)
+{
+	const char *(*strerror_funcs[])(int) = {
+		socket_utils_strerror_0,
+#if WIN32
+		socket_utils_strerror_win
+#endif
+	};
+	int i;
+	const char *result;
+	result = NULL;
+	for (i = 0; i < sizeof(strerror_funcs) / sizeof(strerror_funcs[0]);
+		i++) {
+		result = strerror_funcs[i](errnum);
+		if (result)
+		{
+			break;
+		}
+	}
+	return result;
+}
+
+
