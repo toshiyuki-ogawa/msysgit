@@ -632,6 +632,7 @@ LIB_H += compat/win32/dirent.h
 LIB_H += compat/win32/pthread.h
 LIB_H += compat/win32/syslog.h
 LIB_H += compat/winsock-proc.h
+LIB_H += compat/winsock-utils.h
 LIB_H += compat/win-fd.h
 LIB_H += connected.h
 LIB_H += convert.h
@@ -1452,13 +1453,15 @@ ifneq (,$(findstring MINGW,$(uname_S)))
 		compat/win32/pthread.o compat/win32/syslog.o \
 		compat/win32/dirent.o \
 		compat/winsock-proc.o \
-		compat/win-fd.o
+		compat/win-fd.o \
+		compat/winsock-utils.o
 	BASIC_LDFLAGS += -Wl,--large-address-aware
 	EXTLIBS += -lws2_32
 	GITLIBS += git.res
 	PTHREAD_LIBS =
 	RC = windres -O coff
 	TEST_PROGRAMS_NEED_X += test-win-fd
+	TEST_PROGRAMS_NEED_X += test-winsock-utils
 	X = .exe
 	SPARSE_FLAGS = -Wno-one-bit-signed-bitfield
 ifneq (,$(wildcard ../THIS_IS_MSYSGIT))
