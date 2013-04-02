@@ -44,7 +44,7 @@ int test_2(void)
 	} else {
 		value_str = "Not available";
 	}
-	printf("TIME_WAIT from registry : %s\n", value_str);
+	printf("TIME_WAIT from git-config : %s\n", value_str);
 	return result;
 
 }
@@ -58,7 +58,7 @@ int test_3(void)
 
 	result = 0;
 	
-	printf("TIME_WAIT from registry : %d\n", get_socket_time_wait());
+	printf("TIME_WAIT : %d\n", get_socket_time_wait());
 	return result;
 
 }
