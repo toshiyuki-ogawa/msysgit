@@ -49,7 +49,7 @@ win_fd_status_alloc(int size)
 	header_size = offsetof(win_fd_status, status);
 	status_size = sizeof(win_fd_status) - header_size;
 
-	result = (win_fd_status *)xmaloc(header_size + status_size * size);
+	result = (win_fd_status *)xmalloc(header_size + status_size * size);
 	if (result)
 	{
 		result->size = size;
@@ -106,12 +106,12 @@ win_fd_status_create(int size, const int* fd_array)
 		int i;
 		for (i = 0; i < size; i++) {
 			HANDLE hdl;
-			hdl = _os_get_handle(fd_array[i]);
-			if (hdl != INVALID_HANDLE) {
+			hdl = (HANDLE)_get_osfhandle(fd_array[i]);
+			if (hdl != INVALID_HANDLE_VALUE) {
 				DWORD flags;
-				if (GetHandleInfomation(hdl, &flgs)) {
+				if (GetHandleInformation(hdl, &flags)) {
 					result->status[i].fd = fd_array[i];
-					result->status[i].info = flag;	
+					result->status[i].info = flags;	
 				}
 				else {
 					result->status[i].fd = -1;
@@ -162,21 +162,15 @@ win_fd_status *win_fd_apply_status_0(DWORD flag_bits, DWORD flag,
 {
 	win_fd_status *result;
 	
-	result = win_fd_create_status(size, fd);
+	result = win_fd_status_create(size, fd);
 	if (result) {
-		DWORD flg;
-		flg = 0;
-		if (inheritance) {
-			flg = HANDLE_FLAG_INHERIT;
-		}	
-
 		int i;
 		for (i = 0; i < size; i++) {
 			if (result->status[i].fd >= 0) {
 				HANDLE hdl;
-				hdl = _os_get_handle(result->status[i].fd);
+				hdl = (HANDLE)_get_osfhandle(result->status[i].fd);
 				if (hdl != INVALID_HANDLE_VALUE) {
-					SetHandleInfomation(hdl, flag_bis,
+					SetHandleInformation(hdl, flag_bits,
 	 					flag);
 				}
 			}	
@@ -186,18 +180,18 @@ win_fd_status *win_fd_apply_status_0(DWORD flag_bits, DWORD flag,
 	return result;
 }
 
-void win_fd_restore_inheritance(win_fd_status *fd_status)
+void win_fd_restore(win_fd_status *fd_status)
 {
 	if (fd_status) {
 		int i;
 		for (i = 0; i < fd_status->size; i++) {
 			if (fd_status->status[i].fd >= 0) {
 				HANDLE hdl;
-				hdl = _os_get_handle(fd_status->status[i].fd);
+				hdl = (HANDLE)_get_osfhandle(fd_status->status[i].fd);
 				if (hdl != INVALID_HANDLE_VALUE) {
-					SetHandleInfomation(hdl, 
+					SetHandleInformation(hdl, 
 						HANDLE_FLAG_INHERIT | HANDLE_FLAG_PROTECT_FROM_CLOSE, 
-						result->status[i].info);
+						fd_status->status[i].info);
 				}
 			}
 		}
@@ -205,11 +199,26 @@ void win_fd_restore_inheritance(win_fd_status *fd_status)
 	}
 }
 
-void win_fd_free_status(win_fd_status *fd_status)
+void win_fd_free(win_fd_status *fd_status)
 {
 	if (fd_status) {
 		free(fd_status);
 	}
+}
+void win_fd_restore_and_free(win_fd_status *fd_status)
+{
+	win_fd_restore(fd_status);
+	win_fd_free(fd_status);
+}
+
+char *win_fd_status_to_string(int fd, int info)
+{
+	struct strbuf strb;
+	
+	strbuf_init(&strb, 10); 
+
+	strbuf_addf(&strb, "[fd = %d, info = %#X]", fd, info);
+	return strbuf_detach(&strb, NULL);
 }
 
 char *win_fd_to_string(win_fd_status *fd_status)
@@ -218,8 +227,24 @@ char *win_fd_to_string(win_fd_status *fd_status)
 	if (fd_status) {
 		int i;	
 		struct strbuf stb;
-		strbuf_init(&stb); 
+		strbuf_init(&stb, 10); 
+		for (i = 0; i < fd_status->size; i++) {
+			char *info_str;
+			info_str = win_fd_status_to_string(
+				fd_status->status[i].fd,
+				fd_status->status[i].info);
+			strbuf_addstr(&stb, info_str);
+			free(info_str);
+			if (i < fd_status->size - 1) {
+				strbuf_addstr(&stb, ", ");
+			}
+		}
+		result = strbuf_detach(&stb, NULL);
 	}
+	else {
+		result = NULL;
+	}
+	return result;
 }
 
 

@@ -52,13 +52,9 @@ int test_2(void)
 int test_3(void)
 {
 	int result;
-	int state;
-	time_t time_wait;
-	char *value_str;
-
 	result = 0;
 	
-	printf("TIME_WAIT : %d\n", get_socket_time_wait());
+	printf("TIME_WAIT : %d\n", (int)get_socket_time_wait());
 	return result;
 
 }

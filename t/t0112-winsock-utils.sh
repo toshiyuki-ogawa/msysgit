@@ -1,8 +1,8 @@
 #!/bin/sh
 
-. ./test-lib.sh
+test_description='windows specific socket utility tests'
 
-test_desciption='windows specific socket utility tests'
+. ./test-lib.sh
 
 save_config() {
 	SAVED_WIN_SOCK_TIME_WAIT=`git config --int 'win.sock.time.wait'`
@@ -28,19 +28,54 @@ save_config
 is_valid_output()
 {
 	local a_line
-	
+	local i	
 	local saved_ifs
+	local regex1
+	local regex2
+	local regex3
+	local result
+	regex1='\(TIME_WAIT from registry : [ [:alnum:]]\+\)'
+	regex2='\(TIME_WAIT from git-config : [ [:alnum:]]\+\)'
+	regex3='\(TIME_WAIT : [[:digit:]]\+\)'
+
+	result=0
 	saved_ifs="$IFS"
-	read a_line
-		
+	IFS=$'\n'
+	i=0
+	for a_line in `cat $1`		
+	do
+		local match_line
+		local regex
+		case $i in
+		0)
+			regex=${regex1}
+			;;
+		1)
+			regex=${regex2}
+			;;
+		2)
+			regex=${regex3}
+			;;
+		*)
+		esac
+		match_line=`expr "${a_line}" : ${regex}`
+		if test -z "${match_line}"
+		then
+			result=-1	
+			break
+		fi
+		i=$((i + 1))
+	done
 	IFS="$saved_ifs"
+	return $result
 }
 
 test_expect_success 'run setup' '
-	setup_conifg
+	setup_config
 '
 test_expect_success 'read from registry' '
-	git-test-win-sock-utils >actual	
+	test-winsock-utils >actual	&&
+	is_valid_output actual
 '
 
 restore_config

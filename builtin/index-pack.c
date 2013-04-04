@@ -286,6 +286,7 @@ static const char *open_pack_file(const char *pack_name)
 static void parse_pack_header(void)
 {
 	struct pack_header *hdr = fill(sizeof(struct pack_header));
+	/*trace_printf("parse_pack_header\n" );*/
 
 	/* Header consistency check */
 	if (hdr->hdr_signature != htonl(PACK_SIGNATURE))
@@ -400,6 +401,7 @@ static void *unpack_entry_data(unsigned long offset, unsigned long size,
 	git_SHA_CTX c;
 	char hdr[32];
 	int hdrlen;
+/*	trace_printf("unpack_entry_data\n");*/
 
 	if (!is_delta_type(type)) {
 		hdrlen = sprintf(hdr, "%s %lu", typename(type), size) + 1;
@@ -448,6 +450,7 @@ static void *unpack_raw_entry(struct object_entry *obj,
 	unsigned shift;
 	void *data;
 
+	/*trace_printf("unpack_raw_entry\n"); */
 	obj->idx.offset = consumed_bytes;
 	input_crc32 = crc32(0, NULL, 0);
 
@@ -981,6 +984,7 @@ static void parse_pack_objects(unsigned char *sha1)
 	struct delta_entry *delta = deltas;
 	struct stat st;
 
+	trace_printf("parse_pack_objects\n");
 	if (verbose)
 		progress = start_progress(
 				from_stdin ? _("Receiving objects") : _("Indexing objects"),
@@ -1471,6 +1475,7 @@ int cmd_index_pack(int argc, const char **argv, const char *prefix)
 	struct pack_idx_option opts;
 	unsigned char pack_sha1[20];
 
+	trace_printf("cmd_index_pack\n");
 	if (argc == 2 && !strcmp(argv[1], "-h"))
 		usage(index_pack_usage);
 
@@ -1596,9 +1601,14 @@ int cmd_index_pack(int argc, const char **argv, const char *prefix)
 #endif
 
 	curr_pack = open_pack_file(pack_name);
+	trace_printf("end: open_pack_file\n");
+
 	parse_pack_header();
+	trace_printf("end: parse_pack_header\n");
+
 	objects = xcalloc(nr_objects + 1, sizeof(struct object_entry));
 	deltas = xcalloc(nr_objects, sizeof(struct delta_entry));
+	sleep(10);
 	parse_pack_objects(pack_sha1);
 	resolve_deltas();
 	conclude_pack(fix_thin_pack, curr_pack, pack_sha1);

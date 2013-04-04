@@ -13,7 +13,8 @@
 #include "sigchain.h"
 #include "version.h"
 #include "socket-utils.h"
-
+#include "logging-util.h"
+#include "winsock-proc.h"
 static const char upload_pack_usage[] = "git upload-pack [--strict] [--timeout=<n>] <dir>";
 
 /* bits #0..7 in revision.h, #8..10 in commit.c */
@@ -786,10 +787,10 @@ int main(int argc, char **argv)
 	char *dir;
 	int i;
 	int strict = 0;
-	if (setup_io_care_socket()) {
-		die("failed to initialize io descripter ");
-	}
 
+	if (winproc_setup_io_care_socket()) {
+		die("can't setup io descripters.\n");
+	}
 	git_setup_gettext();
 
 	packet_trace_identity("upload-pack");
@@ -838,5 +839,11 @@ int main(int argc, char **argv)
 	if (getenv("GIT_DEBUG_SEND_PACK"))
 		debug_fd = atoi(getenv("GIT_DEBUG_SEND_PACK"));
 	upload_pack();
+#ifdef EMULATE_TIME_WAIT_SOCKET
+	if (is_socket(1)) {
+		set_socket_to_time_wait(1, 1);
+	}
+#endif
+
 	return 0;
 }
