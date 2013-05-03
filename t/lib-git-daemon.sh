@@ -14,28 +14,47 @@ GIT_DAEMON_DOCUMENT_ROOT_PATH="$PWD"/repo
 GIT_DAEMON_PID_FILE="$GIT_DAEMON_DOCUMENT_ROOT_PATH"/daemon_pid
 GIT_DAEMON_URL=git://127.0.0.1:$LIB_GIT_DAEMON_PORT
 
-GIT_DAEMON_KILL="command -p kill -f"
 GIT_DAEMON_OUTPUT=git_daemon_output
+
+kill_and_wait() {
+	local result
+	result=0
+	case $(uname -s) in
+	*MINGW*)
+		(exec kill -f $1)	
+		wait $2
+		# $2 process will be exit on normaly. 
+		# Because child process exit.
+		# I thought it was better to exit as kill emulation. 
+		result=$((128 + 15))
+		;;
+	*)
+		kill $2
+		wait $2
+		result=$?
+		;;
+	esac
+	return $result
+
+}
+
 git_daemon_kill() {
 	local result
 	result=0
 	if test $1 -ne $2;
 	then
 		# assume running on Cygiwin or Mingw or Msysgit
-		(exec kill -f $1)
-		wait $2
-		# $2 process will be exit on normaly. 
-		# Because child process exit.
-		# I thought it was better to exit as kill emulation. 
-		result=$((128 + 15))
+		kill_and_wait $1 $2
+		result=$?
 	else 
-
 		kill $2
 		wait $2
 		result=$?
 	fi
 	return $result
 }
+
+
 
 start_git_daemon() {
 	if test -n "$GIT_DAEMON_PID"
@@ -62,7 +81,7 @@ start_git_daemon() {
 		>&3 2>"$GIT_DAEMON_OUTPUT" &
 
 	GIT_DAEMON_PID=$!
-	
+
 
 	if test -n "$GIT_DAEMON_OUT_FIFO";
 	then
@@ -98,10 +117,9 @@ stop_git_daemon() {
 	then
 		cat <"$GIT_DAEMON_OUTPUT" >&4
 	fi
-
+	read GIT_DAEMON_REAL_PID <"$GIT_DAEMON_PID_FILE" 
 	# kill git-daemon child of git
 	say >&3 "Stopping git daemon ..."
-	read GIT_DAEMON_REAL_PID <"$GIT_DAEMON_PID_FILE" 
 	git_daemon_kill "$GIT_DAEMON_REAL_PID"  "$GIT_DAEMON_PID" >&3 2>&4
 	#git_daemon_kill "$GIT_DAEMON_REAL_PID"  "$GIT_DAEMON_PID"
 

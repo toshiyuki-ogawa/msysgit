@@ -5,9 +5,11 @@
 #include "strbuf.h"
 #include "string-list.h"
 #include "socket-utils.h"
+#include "env-utils.h"
+#if WIN32
 #include "winsock-proc.h"
 #include "win-fd.h"
-#include "env-utils.h"
+#endif
 #ifndef HOST_NAME_MAX
 #define HOST_NAME_MAX 256
 #endif
@@ -1381,9 +1383,13 @@ int main(int argc, char **argv)
 	struct credentials *cred = NULL;
 	int i;
 	
+#ifdef EMULATE_TIME_WAIT_SOCKET
+#ifdef WIN32
 	if (winproc_setup_io_care_socket()) {
 		die("failed to initialize io descripter\n");
 	}
+#endif
+#endif
 	git_setup_gettext();
 
 	git_extract_argv0_path(argv[0]);

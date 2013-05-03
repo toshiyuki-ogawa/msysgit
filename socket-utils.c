@@ -97,7 +97,7 @@ void set_socket_to_time_wait(int fd, int fd_is_out)
 }
 
 #else
-void set_socket_to_time_wait(int fd)
+void set_socket_to_time_wait(int fd, int fd_is_out)
 {
 }
 #endif

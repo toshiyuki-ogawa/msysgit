@@ -18,14 +18,14 @@ repo_gen_create_content_1() {
     while test $index -lt $2
     do
 	{
-	    result=`cat<< EOF 
+	    result=$(cat<< EOF 
 $result
 int ${1}${index}(int a)
 {
    return a + ${index};
 }
 EOF
-`
+)
 	    index=$(($index + 1))
 	}
     done
@@ -55,15 +55,15 @@ generate_names() {
     local start_value
     local end_value
 
-    index=`printf "%d" "'${1}"`
-    last_index=`printf "%d" "'${2}"`
+    index=$(printf "%d" "'${1}")
+    last_index=$(printf "%d" "'${2}")
     result=''
     while test ${index} -le ${last_index}
     do
 	{
 	    local hex_str
-	    hex_str=`printf "\\%03o" "${index}"`
-	    result=`printf "${result} ${hex_str}"`
+	    hex_str=$(printf "\\%03o" "${index}")
+	    result=$(printf "${result} ${hex_str}")
 	    index=$(($index + 1))
 	}
     done
@@ -73,13 +73,13 @@ generate_names() {
 generate_files()
 {
     local name
-    for name in `generate_names ${REPO_GEN_NAME_START} ${REPO_GEN_NAME_END}`
+    for name in $(generate_names ${REPO_GEN_NAME_START} ${REPO_GEN_NAME_END})
     do
 	{
 	    local contents
-	    contents=`repo_gen_create_content_1 ${name} ${REPO_GEN_CONTENT_SIZE}`;
+	    contents=$(repo_gen_create_content_1 ${name} ${REPO_GEN_CONTENT_SIZE});
 	    local file_name
-	    for file_name in `create_file_names ${REPO_GEN_NAME_INDEX} ${REPO_GEN_NAME_INDEX_LENGTH} ${name} 'c'`
+	    for file_name in $(create_file_names ${REPO_GEN_NAME_INDEX} ${REPO_GEN_NAME_INDEX_LENGTH} ${name} 'c')
 	    do
 		{
 		    echo "${contents}" > "${file_name}" ;
@@ -94,13 +94,13 @@ clean_generated_files()
     local name
     local file_names
     file_names=''
-    for name in `generate_names ${REPO_GEN_NAME_START} ${REPO_GEN_NAME_END}`
+    for name in $(generate_names ${REPO_GEN_NAME_START} ${REPO_GEN_NAME_END})
     do
 	{
 	    local contents
-	    contents=`repo_gen_create_content_1 ${name} ${REPO_GEN_CONTENT_SIZE}`;
+	    contents=$(repo_gen_create_content_1 ${name} ${REPO_GEN_CONTENT_SIZE});
 	    local file_name
-	    for file_name in `create_file_names ${REPO_GEN_NAME_INDEX} ${REPO_GEN_NAME_INDEX_LENGTH} ${name} 'c'`
+	    for file_name in $(create_file_names ${REPO_GEN_NAME_INDEX} ${REPO_GEN_NAME_INDEX_LENGTH} ${name} 'c')
 	    do
 		{
 		    file_names="${file_names} ${file_name}"
